@@ -2,7 +2,7 @@
 /*
 Plugin Name: ChatGPT Clone
 Description: A ChatGPT-style chatbot using OpenAI API with file upload and voice recording.
-Version: 1.3
+Version: 1.3.1
 Author: ADIL
 */
 
@@ -12,20 +12,13 @@ defined('ABSPATH') || exit;
 add_action('wp_enqueue_scripts', function () {
     wp_enqueue_style('chatgpt-clone-style', plugin_dir_url(__FILE__) . 'assets/style.css');
 
-    // External libraries
     wp_enqueue_script('marked-js', 'https://cdn.jsdelivr.net/npm/marked/marked.min.js', [], null, true);
     wp_enqueue_script('wavesurfer-js', 'https://unpkg.com/wavesurfer.js', [], null, true);
 
-    // Main chat script (text chat)
     wp_enqueue_script('chatgpt-clone-script', plugin_dir_url(__FILE__) . 'assets/script.js', ['jquery', 'marked-js'], null, true);
-
-    // File upload handler script (optional)
     wp_enqueue_script('chatgpt-clone-file-upload', plugin_dir_url(__FILE__) . 'assets/file-upload.js', ['jquery'], null, true);
-
-    // Voice record script with wavesurfer.js dependency
     wp_enqueue_script('chatgpt-clone-voice-record', plugin_dir_url(__FILE__) . 'assets/voice-record.js', ['jquery', 'wavesurfer-js'], null, true);
 
-    // Localize data for ajax URL and nonce for all scripts
     $local_data = [
         'ajax_url' => admin_url('admin-ajax.php'),
         'nonce'    => wp_create_nonce('chatgpt_nonce'),
@@ -37,14 +30,14 @@ add_action('wp_enqueue_scripts', function () {
     wp_add_inline_script('chatgpt-clone-voice-record', 'var chatgpt_ajax = ' . json_encode($local_data) . ';', 'before');
 });
 
-// Register shortcode for the chat box
+// Shortcode
 add_shortcode('chatgpt_clone', function () {
     ob_start();
     include plugin_dir_path(__FILE__) . 'templates/chat-box.php';
     return ob_get_clean();
 });
 
-// Handle text chat AJAX
+// Chat text handler
 add_action('wp_ajax_chatgpt_clone_send', 'chatgpt_clone_send');
 add_action('wp_ajax_nopriv_chatgpt_clone_send', 'chatgpt_clone_send');
 
@@ -83,7 +76,7 @@ function chatgpt_clone_send() {
     wp_send_json_success($reply);
 }
 
-// Handle file upload & voice recording AJAX (using Whisper + ChatGPT)
+// File/voice upload handler
 add_action('wp_ajax_chatgpt_clone_file', 'chatgpt_clone_file');
 add_action('wp_ajax_nopriv_chatgpt_clone_file', 'chatgpt_clone_file');
 
@@ -101,25 +94,22 @@ function chatgpt_clone_file() {
 
     $file = $_FILES['file'];
 
-    // Handle upload securely
     require_once ABSPATH . 'wp-admin/includes/file.php';
     $uploaded = wp_handle_upload($file, ['test_form' => false]);
 
     if (!isset($uploaded['file'])) {
-        wp_send_json_error('Upload failed.');
+        wp_send_json_error('Upload failed. Details: ' . print_r($uploaded, true));
     }
 
     $file_path = $uploaded['file'];
 
-    // Call Whisper API (OpenAI audio transcription)
+    // Whisper API call
     $ch = curl_init();
-
     curl_setopt($ch, CURLOPT_URL, 'https://api.openai.com/v1/audio/transcriptions');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
 
     $cfile = curl_file_create($file_path, mime_content_type($file_path), basename($file_path));
-
     curl_setopt($ch, CURLOPT_POSTFIELDS, [
         'file' => $cfile,
         'model' => 'whisper-1',
@@ -144,7 +134,7 @@ function chatgpt_clone_file() {
         wp_send_json_error('Failed to transcribe audio.');
     }
 
-    // Send transcribed text to ChatGPT for response
+    // ChatGPT response using transcribed text
     $chat_body = json_encode([
         'model' => 'gpt-3.5-turbo',
         'messages' => [
@@ -170,7 +160,7 @@ function chatgpt_clone_file() {
     wp_send_json_success($ai_reply);
 }
 
-// Settings page in WP admin
+// Admin Settings
 add_action('admin_menu', function () {
     add_options_page('ChatGPT Clone Settings', 'ChatGPT Clone', 'manage_options', 'chatgpt-clone-settings', 'chatgpt_clone_settings_page');
 });
@@ -199,3 +189,26 @@ function chatgpt_clone_settings_page() {
     </div>
     <?php
 }
+
+// ✅ Allow external audio file uploads (fixes your issue)
+// Force allow certain file types like .webm, .mp3, .wav even during AJAX
+add_filter('wp_check_filetype_and_ext', function ($data, $file, $filename, $mimes) {
+    $ext = pathinfo($filename, PATHINFO_EXTENSION);
+
+    $allowed = [
+        'webm' => 'audio/webm',
+        'mp3'  => 'audio/mpeg',
+        'wav'  => 'audio/wav',
+    ];
+
+    if (isset($allowed[$ext])) {
+        return [
+            'ext'             => $ext,
+            'type'            => $allowed[$ext],
+            'proper_filename' => $filename,
+        ];
+    }
+
+    return $data;
+}, 10, 4);
+
