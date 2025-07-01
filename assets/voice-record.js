@@ -35,29 +35,33 @@ jQuery(document).ready(function ($) {
   });
 
   function uploadVoice(blob) {
-    const formData = new FormData();
-    formData.append('action', 'chatgpt_clone_file');
-    formData.append('file', new File([blob], 'recording.webm', { type: 'audio/webm' }));
-    formData.append('nonce', chatgpt_ajax.nonce);
+  const formData = new FormData();
+  formData.append('action', 'chatgpt_clone_file');
+  formData.append('file', new File([blob], 'recording.webm', { type: 'audio/webm' }));
+  formData.append('nonce', chatgpt_ajax.nonce);
 
-    $.ajax({
-      url: chatgpt_ajax.ajax_url,
-      method: 'POST',
-      data: formData,
-      contentType: false,
-      processData: false,
-      success: function (response) {
-        if (response.success) {
-          appendMessage(response.data, 'bot', true);
-        } else {
-          appendMessage('❌ Upload error: ' + response.data, 'bot');
-        }
-      },
-      error: function () {
-        appendMessage('❌ Voice upload failed.', 'bot');
+  const instruction = $('#chatgpt-input').val().trim();
+  formData.append('user_message', instruction);
+
+  $.ajax({
+    url: chatgpt_ajax.ajax_url,
+    method: 'POST',
+    data: formData,
+    contentType: false,
+    processData: false,
+    success: function(response) {
+      if (response.success) {
+        appendMessage(response.data, 'bot', true);
+      } else {
+        appendMessage('❌ Upload error: ' + response.data, 'bot');
       }
-    });
-  }
+    },
+    error: function() {
+      appendMessage('❌ Voice upload failed.', 'bot');
+    }
+  });
+}
+
 
   function appendMessage(text, sender, isHtml = false) {
     const $messages = $('#chatgpt-messages');
