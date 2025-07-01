@@ -116,7 +116,6 @@ jQuery(document).ready(function ($) {
     document.body.removeChild(textArea);
   }
 
-  // Load a previous chat
   $('#chatgpt-history-list').on('click', 'li', function () {
     const id = $(this).data('id');
     if (!id) return;
@@ -134,13 +133,11 @@ jQuery(document).ready(function ($) {
     });
   });
 
-  // New Chat
   $('#new-chat-btn').on('click', () => {
     initChat();
     renderChatHistory();
   });
 
-  // Form submit
   $form.on('submit', function (e) {
     e.preventDefault();
     const message = $input.val().trim();
@@ -157,7 +154,6 @@ jQuery(document).ready(function ($) {
       chatgpt_ajax.ajax_url,
       {
         action: 'chatgpt_clone_send',
-        api_key: '', // backend will use stored key
         message: message,
         nonce: chatgpt_ajax.nonce
       },
@@ -175,7 +171,6 @@ jQuery(document).ready(function ($) {
     );
   });
 
-  // Submit on Enter
   $input.on('keydown', function (e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -183,7 +178,7 @@ jQuery(document).ready(function ($) {
     }
   });
 
-  // Start first chat
+  // Initialize on load
   initChat();
   renderChatHistory();
 });
