@@ -12,7 +12,9 @@
     <!-- Chat area -->
     <div class="chatgpt-container">
         <div id="chatgpt-messages" class="chatgpt-messages"></div>
+        <div id="chatgpt-attachment-preview"></div>
         <form id="chatgpt-form" class="chatgpt-form" enctype="multipart/form-data">
+            <!-- <div id="chatgpt-attachment-preview"></div> -->
             <input type="file" id="chatgpt-file" accept="audio/*,image/*,.pdf,.doc,.docx,.txt" style="display: none;">
             <button type="button" id="upload-btn" title="Upload file">📎</button>
             <button type="button" id="record-btn" title="Record voice">🎤</button>
