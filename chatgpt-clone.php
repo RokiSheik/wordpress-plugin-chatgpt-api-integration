@@ -10,6 +10,10 @@ defined('ABSPATH') || exit;
 
 // Load Composer autoload (make sure you ran composer require smalot/pdfparser)
 require_once __DIR__ . '/vendor/autoload.php';
+// Load Composer autoload
+require_once __DIR__ . '/vendor/autoload.php';
+
+use thiagoalessio\TesseractOCR\TesseractOCR;
 
 use Smalot\PdfParser\Parser;
 
@@ -19,8 +23,8 @@ add_action('wp_enqueue_scripts', function () {
     wp_enqueue_script('marked-js', 'https://cdn.jsdelivr.net/npm/marked/marked.min.js', [], null, true);
     wp_enqueue_script('wavesurfer-js', 'https://unpkg.com/wavesurfer.js', [], null, true);
     wp_enqueue_script('chatgpt-clone-script', plugin_dir_url(__FILE__) . 'assets/script.js', ['jquery', 'marked-js'], null, true);
-    wp_enqueue_script('chatgpt-clone-file-upload', plugin_dir_url(__FILE__) . 'assets/file-upload.js', ['jquery'], null, true);
-    wp_enqueue_script('chatgpt-clone-voice-record', plugin_dir_url(__FILE__) . 'assets/voice-record.js', ['jquery', 'wavesurfer-js'], null, true);
+    // wp_enqueue_script('chatgpt-clone-file-upload', plugin_dir_url(__FILE__) . 'assets/file-upload.js', ['jquery'], null, true);
+    // wp_enqueue_script('chatgpt-clone-voice-record', plugin_dir_url(__FILE__) . 'assets/voice-record.js', ['jquery', 'wavesurfer-js'], null, true);
 
     $local_data = [
         'ajax_url' => admin_url('admin-ajax.php'),
@@ -29,8 +33,8 @@ add_action('wp_enqueue_scripts', function () {
     ];
 
     wp_localize_script('chatgpt-clone-script', 'chatgpt_ajax', $local_data);
-    wp_add_inline_script('chatgpt-clone-file-upload', 'var chatgpt_ajax = ' . json_encode($local_data) . ';', 'before');
-    wp_add_inline_script('chatgpt-clone-voice-record', 'var chatgpt_ajax = ' . json_encode($local_data) . ';', 'before');
+    // wp_add_inline_script('chatgpt-clone-file-upload', 'var chatgpt_ajax = ' . json_encode($local_data) . ';', 'before');
+    // wp_add_inline_script('chatgpt-clone-voice-record', 'var chatgpt_ajax = ' . json_encode($local_data) . ';', 'before');
 });
 
 // Shortcode for chat box
@@ -48,12 +52,28 @@ function chatgpt_clone_send() {
     $api_key = get_option('chatgpt_clone_api_key', '');
     if (empty($api_key)) wp_send_json_error('API key is missing.');
 
-    $message = sanitize_text_field($_POST['message']);
+    // $message = sanitize_text_field($_POST['message']);
+
+    // $body = json_encode([
+    //     'model' => 'gpt-3.5-turbo',
+    //     'messages' => [['role' => 'user', 'content' => $message]]
+    // ]);
+    $messages_raw = json_decode(stripslashes($_POST['messages']), true);
+    $messages = [];
+
+    foreach ($messages_raw as $item) {
+        $role = $item['sender'] === 'user' ? 'user' : 'assistant';
+        $messages[] = [
+            'role' => $role,
+            'content' => sanitize_text_field($item['text'])
+        ];
+    }
 
     $body = json_encode([
         'model' => 'gpt-3.5-turbo',
-        'messages' => [['role' => 'user', 'content' => $message]]
+        'messages' => $messages
     ]);
+
 
     $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
         'headers' => [
@@ -82,7 +102,9 @@ function chatgpt_clone_file() {
     if (empty($api_key)) wp_send_json_error('API key is missing.');
 
     // Get optional user message from AJAX (instruction or prompt)
-    $user_message = isset($_POST['user_message']) ? sanitize_text_field($_POST['user_message']) : '';
+    // $user_message = isset($_POST['user_message']) ? sanitize_text_field($_POST['user_message']) : '';
+    $user_message = isset($_POST['user_message']) ? sanitize_textarea_field($_POST['user_message']) : '';
+
 
     $file = $_FILES['file'];
     require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -115,12 +137,20 @@ function chatgpt_clone_file() {
 
     } elseif ($ext === 'pdf') {
         $text = extract_text_from_pdf($file_path);
+        // file_put_contents(__DIR__ . '/log.txt', "$text");
+
 
     } elseif ($ext === 'docx') {
         $text = extract_text_from_docx($file_path);
 
+    }  elseif ($ext === 'txt') {
+        $text = extract_text_from_txt($file_path);
+        // file_put_contents(__DIR__ . '/log.txt', "$text");
+
+
     } elseif (in_array($ext, ['jpg', 'jpeg', 'png'])) {
-        $text = 'Image uploaded. OCR support is not available in this version.';
+        $text = extract_text_from_image($file_path);
+        file_put_contents(__DIR__ . '/log.txt', "$text");
 
     } else {
         wp_send_json_error('Unsupported file type.');
@@ -129,7 +159,10 @@ function chatgpt_clone_file() {
     if (empty($text)) wp_send_json_error('Could not extract text.');
 
     // Combine user message and extracted text for prompt
-    $full_prompt = trim($user_message . "\n\n" . $text);
+    // $full_prompt = trim($user_message . "\n\n" . $text);
+    $full_prompt = trim( $user_message . "\n" . $text);
+
+    // file_put_contents(__DIR__ . '/log.txt', "$full_prompt");
 
     // Send combined prompt to ChatGPT API
     $chat_body = json_encode([
@@ -162,6 +195,16 @@ function extract_text_from_pdf($file_path) {
         return '';
     }
 }
+function extract_text_from_image($image_path) {
+    try {
+        $ocr = new TesseractOCR($image_path);
+        $ocr->executable('C:\Program Files\Tesseract-OCR\tesseract.exe'); // Set this path manually
+        return $ocr->run();
+    } catch (Exception $e) {
+        return 'OCR failed: ' . $e->getMessage();
+    }
+}
+
 
 // Extract text from DOCX (without composer)
 function extract_text_from_docx($file_path) {
@@ -173,6 +216,43 @@ function extract_text_from_docx($file_path) {
     }
     return '';
 }
+
+function extract_text_from_txt($file_path) {
+    if (!file_exists($file_path)) {
+        error_log("TXT file does not exist: " . $file_path);
+        return '';
+    }
+
+    if (!is_readable($file_path)) {
+        error_log("TXT file is not readable: " . $file_path);
+        return '';
+    }
+
+    // Read raw file contents
+    $text = file_get_contents($file_path);
+    if ($text === false || trim($text) === '') {
+        error_log("TXT file read failed or is empty: " . $file_path);
+        return '';
+    }
+
+    // Detect encoding (returns false if can't detect)
+    $encoding = mb_detect_encoding($text, ['UTF-8', 'ISO-8859-1', 'Windows-1252', 'ASCII'], true);
+
+    if ($encoding !== 'UTF-8') {
+        // Convert to UTF-8 if not already
+        $text = mb_convert_encoding($text, 'UTF-8', $encoding ?: 'auto');
+    }
+
+    // Remove any BOM (byte order mark) if present
+    $text = preg_replace('/^\xEF\xBB\xBF/', '', $text);
+    // file_put_contents(__DIR__ . '/log.txt', "Extracted TXT content:\n" . $text);
+
+
+    return trim($text);
+}
+
+
+
 
 // Admin settings page
 add_action('admin_menu', function () {
@@ -209,6 +289,8 @@ add_filter('upload_mimes', function ($mimes) {
     $mimes['jpg']   = 'image/jpeg';
     $mimes['jpeg']  = 'image/jpeg';
     $mimes['png']   = 'image/png';
+    $mimes['txt']   = 'text/plain';
+    $mimes['octet'] = 'application/octet-stream';
     return $mimes;
 });
 
@@ -223,7 +305,8 @@ add_filter('wp_check_filetype_and_ext', function ($data, $file, $filename, $mime
         'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'jpg' => 'image/jpeg',
         'jpeg' => 'image/jpeg',
-        'png' => 'image/png'
+        'png' => 'image/png',
+        'txt' => 'text/plain' 
     ];
     if (isset($allowed[$ext])) {
         return [
