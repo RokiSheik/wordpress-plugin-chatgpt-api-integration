@@ -48,12 +48,28 @@ function chatgpt_clone_send() {
     $api_key = get_option('chatgpt_clone_api_key', '');
     if (empty($api_key)) wp_send_json_error('API key is missing.');
 
-    $message = sanitize_text_field($_POST['message']);
+    // $message = sanitize_text_field($_POST['message']);
+
+    // $body = json_encode([
+    //     'model' => 'gpt-3.5-turbo',
+    //     'messages' => [['role' => 'user', 'content' => $message]]
+    // ]);
+    $messages_raw = json_decode(stripslashes($_POST['messages']), true);
+    $messages = [];
+
+    foreach ($messages_raw as $item) {
+        $role = $item['sender'] === 'user' ? 'user' : 'assistant';
+        $messages[] = [
+            'role' => $role,
+            'content' => sanitize_text_field($item['text'])
+        ];
+    }
 
     $body = json_encode([
         'model' => 'gpt-3.5-turbo',
-        'messages' => [['role' => 'user', 'content' => $message]]
+        'messages' => $messages
     ]);
+
 
     $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
         'headers' => [

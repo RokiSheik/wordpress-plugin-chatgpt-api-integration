@@ -154,7 +154,7 @@ jQuery(document).ready(function ($) {
       chatgpt_ajax.ajax_url,
       {
         action: 'chatgpt_clone_send',
-        message: message,
+        messages: JSON.stringify(currentMessages),
         nonce: chatgpt_ajax.nonce
       },
       function (response) {
